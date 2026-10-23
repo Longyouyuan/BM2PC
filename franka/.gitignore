@@ -1,0 +1,15 @@
+build/
+devel/
+install/
+logs/
+.catkin_tools/
+.vscode/
+__pycache__/
+*.py[cod]
+*.bag
+*.csv
+*.npy
+*.log
+plot_data/
+franka_data/
+
