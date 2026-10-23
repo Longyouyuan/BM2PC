@@ -1,0 +1,13 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Raw videos (README uses assets/gifs and an uploaded overview video)
+*.mp4
+
+# Experiment logs
+assets/**/logs/
+assets/**/logs_batch.txt
+
+# Scratch
+tmp/

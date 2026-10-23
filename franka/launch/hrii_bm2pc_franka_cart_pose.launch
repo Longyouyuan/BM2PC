@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- Franka robot parameters -->
+    <arg name="robot_ip" default="$(optenv ROBOT_ARM_IP 192.168.0.101)"/>
+    <arg name="robot" default="panda"/>
+    <arg name="arm_id" default="$(arg robot)"/>
+    <arg name="load_gripper" default="true"/>
+
+    <!-- Controller parameters -->
+    <arg name="max_delta" default="0.001" doc="Max translational delta per cycle [m] (0.001 = 1 m/s at 1kHz)"/>
+
+    <!-- App parameters -->
+    <arg name="server_ip" default="$(optenv BM2PC_SERVER_IP 127.0.0.1)"/>
+    <arg name="enable_vis" default="true"/>
+    <arg name="launch_rviz" default="true"/>
+    <arg name="rviz_config_file" default="$(find hrii_dummy_fsm)/rviz/dummy_fixed_manipulator.rviz"/>
+
+    <!-- 1. Launch franka_control (hardware interface + state controller + TF) -->
+    <include file="$(find franka_control)/launch/franka_control.launch">
+        <arg name="robot_ip" value="$(arg robot_ip)"/>
+        <arg name="robot" value="$(arg robot)"/>
+        <arg name="arm_id" value="$(arg arm_id)"/>
+        <arg name="load_gripper" value="$(arg load_gripper)"/>
+    </include>
+
+    <!-- 2. Load controller config and spawn -->
+    <rosparam command="load"
+              file="$(find hrii_bm2pc_rope)/config/rope_cartesian_pose_controller.yaml"
+              subst_value="true"/>
+    <!-- Override max_delta from launch arg -->
+    <param name="rope_cartesian_pose_controller/max_delta" value="$(arg max_delta)"/>
+
+    <node name="controller_spawner"
+          pkg="controller_manager"
+          type="spawner"
+          respawn="false"
+          output="screen"
+          args="rope_cartesian_pose_controller"/>
+
+    <!-- 3. Rope action node (reuse existing bm2pc_franka_pose_client_node) -->
+    <node pkg="hrii_bm2pc_rope"
+          type="bm2pc_franka_pose_client_node"
+          name="bm2pc_franka_pose_client_node"
+          output="screen">
+
+        <param name="origin_link_name" value="$(arg arm_id)_link0"/>
+        <param name="marker_link_name" value="$(arg arm_id)_EE"/>
+        <param name="transf_publisher_name" value="rope_cartesian_pose_controller/desired_EE_pose"/>
+
+        <param name="server_ip" value="$(arg server_ip)"/>
+        <param name="enable_vis" value="$(arg enable_vis)"/>
+
+        <!-- Remap to the endeffector_point topic published by the controller -->
+        <remap from="endeffector_point_topic"
+               to="rope_cartesian_pose_controller/endeffector_point"/>
+        <remap from="special_initial_pos_topic"
+               to="rope_cartesian_pose_controller/special_initial_pos"/>
+    </node>
+
+    <!-- 4. OptiTrack -->
+    <include file="$(find hrii_optitrack)/launch/hrii_optitrack.launch"/>
+
+    <!-- 5. RViz -->
+    <node pkg="rviz" type="rviz" name="rviz" if="$(arg launch_rviz)"
+          args="-d $(arg rviz_config_file)"/>
+
+</launch>

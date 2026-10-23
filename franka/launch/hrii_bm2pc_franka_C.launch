@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- General parameters -->
+    <arg name="interface_type" default="$(optenv INTERFACE_TYPE SIMULATION)"/>
+
+    <arg name="launch_rviz" default="true"/>
+    <arg name="rviz_config_file" default="$(find hrii_dummy_fsm)/rviz/dummy_fixed_manipulator.rviz"/>
+
+    <!-- General simulation parameters -->
+    <arg name="launch_gazebo_gui" default="$(eval interface_type == 'SIMULATION')"/>
+    <arg name="launch_gazebo_paused" default="$(eval interface_type == 'SIMULATION')"/>
+    <arg name="launch_gazebo_world" default="$(eval interface_type == 'SIMULATION')"/>
+
+    <!-- General robot parameters -->
+    <arg name="robot_id" default="$(optenv ROBOT_ID franka_a)"/>
+    <arg name="robot_model" default="franka"/>
+    <arg name="arm_model" default="franka"/>
+    <!-- <arg name="launch_gripper" default="franka_gripper"/> -->
+    <arg name="launch_gripper" default="no_gripper"/>
+    <arg name="launch_interactive_marker" default="false"/>
+    <arg name="robot_interface_config_file"
+         default="$(eval find('hrii_' + arg('robot_model') + '_interface') + '/config/' + arg('robot_model') + '_no_gripper.yaml')"/>
+
+    <!-- Robot hardware parameters -->
+    <arg name="robot_arm_ip" default="$(optenv ROBOT_ARM_IP 192.168.0.101)"/>
+
+    <!-- Arm Controller parameters -->
+    <arg name="controller_type" default="cartesian_impedance_controller"/>
+    <arg name="controller_args" default="--impedance-filtering 1
+                                         --cartesian-stiffness-trans 800
+                                         --cartesian-stiffness-rot 50
+                                         --nullspace-stiffness 10"/>
+
+    <!-- Optional app parameters -->
+    <arg name="server_ip" default="$(optenv BM2PC_SERVER_IP 127.0.0.1)"/>
+    <arg name="enable_vis" default="true"/>
+
+    <!-- Load generic controller -->
+    <include file="$(find hrii_general_robot_controllers)/launch/generic_robot_launcher.xml" pass_all_args="true"/>
+
+    <group ns="$(arg robot_id)">
+
+        <!-- Load arm controller -->
+        <node pkg="hrii_fixed_base_robot_controllers"
+              type="$(arg controller_type)"
+              name="$(arg controller_type)"
+              output="screen"
+              args="--config-file-path $(arg robot_interface_config_file)
+                    $(arg controller_args)"/>
+
+        <!-- Franka-side BM2PC client: state transport and action execution -->
+        <node pkg="hrii_bm2pc_rope"
+              type="bm2pc_franka_client_node"
+              name="bm2pc_franka_client"
+              output="screen">
+
+            <!-- original action_execuation params -->
+            <param name="origin_link_name" value="$(arg robot_id)_$(arg robot_model)_ctrl_link"/>
+            <param name="marker_link_name" value="$(arg robot_id)_$(arg robot_model)_EE"/>
+            <param name="transf_publisher_name" value="$(arg controller_type)/equilibrium_pose"/>
+            <param name="impedance_publisher_name" value="$(arg controller_type)/impedance_param"/>
+
+            <!-- extra params for merged node -->
+            <param name="server_ip" value="$(arg server_ip)"/>
+            <param name="enable_vis" value="$(arg enable_vis)"/>
+
+            <!-- Remap endeffector_point topic to the controller's published topic -->
+            <remap from="endeffector_point_topic"
+                   to="$(arg controller_type)/endeffector_point"/>
+        </node>
+
+        <!-- Load optitrack -->
+        <include file="$(find hrii_optitrack)/launch/hrii_optitrack.launch"/>
+
+    </group>
+
+</launch>

@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- General parameters -->
+    <arg name="interface_type" default="$(optenv INTERFACE_TYPE SIMULATION)"/>
+
+    <arg name="launch_rviz" default="true"/>
+    <arg name="rviz_config_file" default="$(find hrii_dummy_fsm)/rviz/dummy_fixed_manipulator.rviz"/>
+
+    <!-- General simulation parameters -->
+    <arg name="launch_gazebo_gui" default="$(eval interface_type == 'SIMULATION')"/>
+    <arg name="launch_gazebo_paused" default="$(eval interface_type == 'SIMULATION')"/>
+    <arg name="launch_gazebo_world" default="$(eval interface_type == 'SIMULATION')"/>
+
+    <!-- General robot parameters -->
+    <arg name="robot_id" default="$(optenv ROBOT_ID franka_a)"/>
+    <arg name="robot_model" default="franka"/>
+    <arg name="arm_model" default="franka"/>
+    <!-- <arg name="launch_gripper" default="franka_gripper"/> -->
+    <arg name="launch_gripper" default="no_gripper"/>
+    <arg name="launch_interactive_marker" default="false"/>
+    <arg name="robot_interface_config_file"
+         default="$(eval find('hrii_' + arg('robot_model') + '_interface') + '/config/' + arg('robot_model') + '_no_gripper.yaml')"/>
+
+    <!-- Robot hardware parameters -->
+    <arg name="robot_arm_ip" default="$(optenv ROBOT_ARM_IP 192.168.0.101)"/>
+
+    <!-- Arm Controller parameters — joint_cartesian_position_controller -->
+    <arg name="controller_type" default="joint_cartesian_position_controller"/>
+    <arg name="motion_linear_gain" default="0.01"/>
+    <arg name="motion_angular_gain" default="0.005"/>
+    <arg name="saturation_gain" default="0.0005"/>
+    <arg name="controller_args" default="--motion-linear-gain $(arg motion_linear_gain)
+                                         --motion-angular-gain $(arg motion_angular_gain)
+                                         --saturation-gain $(arg saturation_gain)"/>
+
+    <!-- Optional app parameters -->
+    <arg name="server_ip" default="$(optenv BM2PC_SERVER_IP 127.0.0.1)"/>
+    <arg name="enable_vis" default="true"/>
+
+    <!-- Load generic controller -->
+    <include file="$(find hrii_general_robot_controllers)/launch/generic_robot_launcher.xml" pass_all_args="true"/>
+
+    <group ns="$(arg robot_id)">
+
+        <!-- Load arm controller -->
+        <node pkg="hrii_fixed_base_robot_controllers"
+              type="$(arg controller_type)"
+              name="$(arg controller_type)"
+              output="screen"
+              args="--config-file-path $(arg robot_interface_config_file)
+                    $(arg controller_args)"/>
+
+        <!-- Rope action node for position controller -->
+        <node pkg="hrii_bm2pc_rope"
+              type="bm2pc_franka_pose_client_node"
+              name="bm2pc_franka_pose_client_node"
+              output="screen">
+
+            <param name="origin_link_name" value="$(arg robot_id)_$(arg robot_model)_ctrl_link"/>
+            <param name="marker_link_name" value="$(arg robot_id)_$(arg robot_model)_EE"/>
+            <param name="transf_publisher_name" value="$(arg controller_type)/desired_EE_pose"/>
+
+            <param name="server_ip" value="$(arg server_ip)"/>
+            <param name="enable_vis" value="$(arg enable_vis)"/>
+
+            <!-- Remap to the endeffector_point topic published by joint_cartesian_position_controller -->
+            <remap from="endeffector_point_topic"
+                   to="$(arg controller_type)/endeffector_point"/>
+        </node>
+
+        <!-- Load optitrack -->
+        <include file="$(find hrii_optitrack)/launch/hrii_optitrack.launch"/>
+
+    </group>
+
+</launch>

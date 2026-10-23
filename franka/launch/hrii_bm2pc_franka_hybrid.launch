@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- Franka robot parameters -->
+    <arg name="robot_ip" default="$(optenv ROBOT_ARM_IP 192.168.0.101)"/>
+    <arg name="robot" default="panda" doc="choose your robot. Possible values: [panda, fr3]"/>
+    <arg name="arm_id" default="$(arg robot)"/>
+    <arg name="load_gripper" default="true"/>
+
+    <!-- App parameters -->
+    <arg name="server_ip" default="$(optenv BM2PC_SERVER_IP 127.0.0.1)"/>
+    <arg name="enable_vis" default="true"/>
+    <arg name="launch_rviz" default="true"/>
+    <arg name="rviz_config_file" default="$(find hrii_dummy_fsm)/rviz/dummy_fixed_manipulator.rviz"/>
+
+    <!-- 1. Launch franka_control (hardware interface + state controller + TF) -->
+    <include file="$(find franka_control)/launch/franka_control.launch" pass_all_args="true"/>
+
+    <!-- 2. Load hybrid controller config and spawn -->
+    <rosparam command="load"
+              file="$(find franka_controllers)/config/franka_controllers.yaml"
+              subst_value="true"/>
+
+    <!-- Force pure motion mode: all axes = motion (false), zero force/torque gains -->
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/motion_translation_gain" value="0.010"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/motion_rotation_gain" value="0.00001"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/axis_mode_x" value="false"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/axis_mode_y" value="false"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/axis_mode_z" value="false"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/axis_mode_roll" value="false"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/axis_mode_pitch" value="false"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/axis_mode_yaw" value="false"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/force_P_gain" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/force_I_gain" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/force_D_gain" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/force_PID_max_output" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/torque_P_gain" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/torque_I_gain" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/torque_D_gain" value="0.0"/>
+    <param name="cart_hybrid_motion_force_controller/dyn_rec_ctrl_param/torque_PID_max_output" value="0.0"/>
+
+    <node name="controller_spawner"
+          pkg="controller_manager"
+          type="spawner"
+          respawn="false"
+          output="screen"
+          args="cart_hybrid_motion_force_controller"/>
+
+    <!-- 3. Franka-side BM2PC client -->
+    <node pkg="hrii_bm2pc_rope"
+          type="bm2pc_franka_client_node"
+          name="bm2pc_franka_client"
+          output="screen">
+
+        <param name="origin_link_name" value="$(arg arm_id)_link0"/>
+        <param name="marker_link_name" value="$(arg arm_id)_EE"/>
+        <param name="transf_publisher_name" value="cart_hybrid_motion_force_controller/desired_tool_pose"/>
+        <param name="impedance_publisher_name" value="cart_hybrid_motion_force_controller/impedance_values"/>
+
+        <param name="server_ip" value="$(arg server_ip)"/>
+        <param name="enable_vis" value="$(arg enable_vis)"/>
+
+        <!-- The hybrid controller does not publish endeffector_point;
+             robot state comes from TF via waitForInitialPose / pos_goal_ -->
+        <remap from="endeffector_point_topic"
+               to="cart_hybrid_motion_force_controller/endeffector_point"/>
+    </node>
+
+    <!-- 4. OptiTrack -->
+    <include file="$(find hrii_optitrack)/launch/hrii_optitrack.launch"/>
+
+    <!-- 5. Dynamic reconfigure GUI (optional, for tuning gains) -->
+    <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false"/>
+
+    <!-- 6. RViz -->
+    <node pkg="rviz" type="rviz" name="rviz" if="$(arg launch_rviz)"
+          args="-d $(arg rviz_config_file)"/>
+
+</launch>

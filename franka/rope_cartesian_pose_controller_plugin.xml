@@ -1,0 +1,11 @@
+<library path="lib/librope_cartesian_pose_controller">
+  <class name="hrii_bm2pc_rope/RopeCartesianPoseController"
+         type="hrii_bm2pc_rope::RopeCartesianPoseController"
+         base_class_type="controller_interface::ControllerBase">
+    <description>
+      Cartesian pose controller for rope manipulation using FrankaPoseCartesianInterface.
+      Subscribes to desired_EE_pose (PoseStamped), publishes endeffector_point (CartesianPoint).
+      Uses setCommand() for direct Cartesian pose control via libfranka.
+    </description>
+  </class>
+</library>

@@ -1,0 +1,4 @@
+rope_cartesian_pose_controller:
+    type: hrii_bm2pc_rope/RopeCartesianPoseController
+    arm_id: $(arg arm_id)
+    max_delta: 0.001
